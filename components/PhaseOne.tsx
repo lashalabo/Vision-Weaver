@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { CreativeSession, InspirationImage, Style } from '../types';
 import { ART_STYLES, COLOR_PALETTES } from '../constants';
 import { expandPrompt } from '../services/geminiService';
@@ -8,7 +8,8 @@ import ColorPaletteSelector from './ColorPaletteSelector';
 import ImageGrid from './ImageGrid';
 import MoodBoard from './MoodBoard';
 import Loader from './Loader';
-import { MagicWandIcon, NextIcon } from './icons';
+import { MagicWandIcon, NextIcon, CompassIcon } from './icons';
+import DiscoveryQuiz from './DiscoveryQuiz';
 
 interface PhaseOneProps {
   onComplete: (sessionData: CreativeSession) => void;
@@ -34,6 +35,9 @@ const PhaseOne: React.FC<PhaseOneProps> = ({ onComplete, initialSessionData }) =
   const [inspirationImages, setInspirationImages] = useState<InspirationImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(0);
+  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [isWeavingAfterQuiz, setIsWeavingAfterQuiz] = useState(false);
+
 
   const handlePromptExpansion = async () => {
     if (!session.originalPrompt) {
@@ -51,6 +55,28 @@ const PhaseOne: React.FC<PhaseOneProps> = ({ onComplete, initialSessionData }) =
     
     setIsLoading(false);
     setStep(1);
+  };
+  
+  // Use an effect to run prompt expansion after the state has updated from the quiz
+  useEffect(() => {
+    if (isWeavingAfterQuiz && session.originalPrompt) {
+      handlePromptExpansion();
+      setIsWeavingAfterQuiz(false); // Reset the signal
+    }
+  }, [isWeavingAfterQuiz, session.originalPrompt]);
+
+  const handleQuizComplete = (tags: string[]) => {
+    setIsQuizOpen(false);
+    if (tags.length > 0) {
+      // Append quiz tags to the existing prompt or create a new one
+      const newPrompt = session.originalPrompt
+        ? `${session.originalPrompt}, ${tags.join(', ')}`
+        : tags.join(', ');
+      
+      setSession(prev => ({ ...prev, originalPrompt: newPrompt }));
+      // Set the signal to true to trigger the useEffect
+      setIsWeavingAfterQuiz(true);
+    }
   };
 
   const handleSelectStyle = useCallback((style: Style) => {
@@ -102,7 +128,7 @@ const PhaseOne: React.FC<PhaseOneProps> = ({ onComplete, initialSessionData }) =
       {step === 0 && (
         <div className="text-center max-w-2xl mx-auto p-8 bg-gray-800 rounded-lg shadow-xl animate-slide-up">
           <h2 className="text-3xl font-bold mb-2 text-white">Start with an Idea</h2>
-          <p className="text-gray-400 mb-6">Describe the image you want to create. Our AI will help you discover and refine your vision.</p>
+          <p className="text-gray-400 mb-6">Describe the image you want to create, or let us help you find your style.</p>
           <div className="flex gap-2">
             <input
               type="text"
@@ -120,6 +146,18 @@ const PhaseOne: React.FC<PhaseOneProps> = ({ onComplete, initialSessionData }) =
               {isLoading ? <Loader /> : <> <MagicWandIcon className="w-5 h-5" /> Weave </ >}
             </button>
           </div>
+          <div className="mt-4 flex items-center justify-center">
+             <div className="h-px bg-gray-600 flex-grow"></div>
+             <span className="mx-4 text-gray-500 text-sm">OR</span>
+             <div className="h-px bg-gray-600 flex-grow"></div>
+          </div>
+          <button
+            onClick={() => setIsQuizOpen(true)}
+            className="mt-4 w-full sm:w-auto px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-md flex items-center justify-center gap-2 transition"
+          >
+            <CompassIcon className="w-5 h-5" />
+            Help Me Discover My Style
+          </button>
         </div>
       )}
 
@@ -159,6 +197,13 @@ const PhaseOne: React.FC<PhaseOneProps> = ({ onComplete, initialSessionData }) =
             />
           </div>
         </div>
+      )}
+
+      {isQuizOpen && (
+        <DiscoveryQuiz
+          onClose={() => setIsQuizOpen(false)}
+          onComplete={handleQuizComplete}
+        />
       )}
     </div>
   );

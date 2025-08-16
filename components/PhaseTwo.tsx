@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CreativeSession, InspirationImage, GeneratedImage } from '../types';
-import { generateFinalPrompt, generateImages } from '../services/geminiService';
+import { generateInitialPrompt, generateNegativePrompt, generateImages } from '../services/geminiService';
 import Loader from './Loader';
 import { BackIcon, GenerateIcon, SparklesIcon, PromptStrengthIcon, CompositionIcon, SeedIcon } from './icons';
 
@@ -29,11 +29,14 @@ const PhaseTwo: React.FC<PhaseTwoProps> = ({ sessionData, onBack }) => {
   }, [sessionData.dislikedImages]);
 
   useEffect(() => {
-    setSession(prev => ({...prev, negativePrompt: initialNegativePrompt }));
-  }, [initialNegativePrompt]);
+    // Pre-fill the negative prompt only if it's empty
+    if (!session.negativePrompt) {
+      setSession(prev => ({...prev, negativePrompt: initialNegativePrompt }));
+    }
+  }, [initialNegativePrompt, session.negativePrompt]);
   
   useEffect(() => {
-    const prompt = generateFinalPrompt(session);
+    const prompt = generateInitialPrompt(session);
     setFinalPrompt(prompt);
   }, [session]);
 
@@ -42,7 +45,11 @@ const PhaseTwo: React.FC<PhaseTwoProps> = ({ sessionData, onBack }) => {
     setGeneratedImages([]);
     const seedToUse = currentSeed ?? Math.floor(Math.random() * 1000000);
     setCurrentSeed(seedToUse);
-    const images = await generateImages(finalPrompt, seedToUse);
+
+    const positivePrompt = finalPrompt;
+    const negativePrompt = generateNegativePrompt(session);
+
+    const images = await generateImages(positivePrompt, negativePrompt, seedToUse);
     setGeneratedImages(images);
     setIsLoading(false);
   };

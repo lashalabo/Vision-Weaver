@@ -37,22 +37,18 @@ export const expandPrompt = async (prompt: string): Promise<string[]> => {
   }
 };
 
-export const generateFinalPrompt = (sessionData: CreativeSession): string => {
+export const generateInitialPrompt = (sessionData: CreativeSession): string => {
     const { 
         originalPrompt, 
         selectedStyle, 
         colorPalette, 
         approvedImages, 
-        dislikedImages, 
         compositionGuideUrl,
         guidanceScale,
         compositionInfluence,
-        negativePrompt
     } = sessionData;
 
     let promptParts: string[] = [];
-    let negativeParts: string[] = [];
-
     promptParts.push(`Create a high-quality, detailed image of: ${originalPrompt}.`);
 
     if (selectedStyle) {
@@ -91,32 +87,34 @@ export const generateFinalPrompt = (sessionData: CreativeSession): string => {
     }
     promptParts.push(guidanceStrength);
 
+    promptParts.push('The final image must be visually stunning, coherent, and highly detailed.');
+
+    return promptParts.join(' ');
+};
+
+export const generateNegativePrompt = (sessionData: CreativeSession): string => {
+    const { dislikedImages, negativePrompt } = sessionData;
+    let negativeParts: string[] = [];
+    
     const dislikedTags = new Set<string>();
     dislikedImages.forEach(img => {
        if (img.alt_description) {
-            img.alt_description.split(' ').forEach(tag => dislikedTags.add(tag.replace(/,/g, '')));
+            img.alt_description.split(/, | /).forEach(tag => dislikedTags.add(tag.replace(/,/g, '')));
         }
     });
     if (dislikedTags.size > 0) {
         negativeParts.push(Array.from(dislikedTags).slice(0, 15).join(', '));
     }
+
     if (negativePrompt) {
         negativeParts.push(negativePrompt);
     }
     
-    promptParts.push('The final image must be visually stunning, coherent, and highly detailed.');
-
-    const finalPrompt = promptParts.join(' ');
-    
-    if (negativeParts.length > 0) {
-        return `${finalPrompt} --- Negative prompt: avoid ${negativeParts.join(', ')}.`;
-    }
-
-    return finalPrompt;
+    return negativeParts.join(', ');
 };
 
 
-export const generateImages = async (prompt: string, seed: number): Promise<GeneratedImage[]> => {
+export const generateImages = async (prompt: string, negativePrompt: string, seed: number): Promise<GeneratedImage[]> => {
     // The Imagen API does not support a seed parameter.
     // The seed is passed here to be returned with the image for UI consistency,
     // allowing the user to "reuse" the same prompt and settings, even though
@@ -126,6 +124,7 @@ export const generateImages = async (prompt: string, seed: number): Promise<Gene
             model: 'imagen-3.0-generate-002',
             prompt: prompt,
             config: {
+                negativePrompt: negativePrompt,
                 numberOfImages: 3,
                 outputMimeType: 'image/jpeg',
                 aspectRatio: '1:1',
@@ -137,7 +136,7 @@ export const generateImages = async (prompt: string, seed: number): Promise<Gene
             seed: seed
         }));
     } catch (error) {
-        console.error("Error generating images:", error);
+        console.error("Error generating images:", error, { prompt, negativePrompt });
         return [
             { src: "https://picsum.photos/seed/error1/512", seed: seed },
             { src: "https://picsum.photos/seed/error2/512", seed: seed },
